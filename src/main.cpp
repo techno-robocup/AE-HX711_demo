@@ -2,13 +2,24 @@
 #include "HX711.h"
 
 // Pin definitions
-const uint8_t DT_PIN = 32;
-const uint8_t SCK_PIN = 33;
+const uint8_t DT_PIN = 34;
+const uint8_t SCK_PIN = 27;
 
 HX711 scale;
 
 // Adjust this calibration factor after calibration
 float calibration_factor = 1.0; 
+
+bool waitForScaleReady(unsigned long timeoutMs) {
+  unsigned long start = millis();
+  while (!scale.is_ready()) {
+    if (millis() - start >= timeoutMs) {
+      return false;
+    }
+    delay(10);
+  }
+  return true;
+}
 
 void setup() {
   Serial.begin(115200);
@@ -22,7 +33,11 @@ void setup() {
   scale.reset();
 
   Serial.println("Taring... Please ensure no weight is on the scale.");
-  scale.tare(20); // Average of 20 readings for better accuracy during tare
+  if (waitForScaleReady(3000)) {
+    scale.tare(20); // Average of 20 readings for better accuracy during tare
+  } else {
+    Serial.println("Tare skipped: HX711 not ready (check wiring/power).\nContinuing without tare.");
+  }
   
   scale.set_scale(calibration_factor);
 
@@ -53,8 +68,12 @@ void loop() {
     char temp = Serial.read();
     if (temp == 't' || temp == 'T') {
       Serial.println("Taring...");
-      scale.tare(10);
-      Serial.println("Done.");
+      if (waitForScaleReady(3000)) {
+        scale.tare(10);
+        Serial.println("Done.");
+      } else {
+        Serial.println("Tare failed: HX711 not ready.");
+      }
     } 
     else if (temp == '+') {
       calibration_factor += 10;
